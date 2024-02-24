@@ -1,0 +1,156 @@
+# To improve query performance, we strongly suggest adding indexes to any field that you plan to filter or sort by
+# Add the `@index` or `@index(unique: true)` annotation after any non-key field
+# https://academy.subquery.network/build/graphql.html#indexing-by-non-primary-key-field
+
+type DelegatorReward @entity {
+  id: ID!
+  blockHeight: BigInt!
+  blockTimestamp: Date!
+  txHash: String
+  feeDenomination: String
+  feeAmount: String
+  rewardAmount: String
+  delegatorAddress: String
+  validatorAddress: String
+}
+
+type IbcEvent @entity {
+  id: ID!
+  blockHeight: BigInt!
+  blockTimestamp: Date!
+  txHash: String!
+  sender: User!
+  receiver: User!
+  sourceChain: String
+  sourceChainTransaction: String
+  destinationChain: String
+  destinationChainTransaction: String
+  amount: BigInt
+  type: String
+}
+
+type User @entity {
+  id: ID! # Wallet Address
+}
+
+type Transfer @entity {
+  id: ID!
+  blockHeight: BigInt!
+  blockTimestamp: Date!
+  txHash: String!
+  fromAddress: String
+  toAddress: String
+  amount: String
+}
+
+type Transaction @entity {
+  id: ID!
+  blockHeight: BigInt!
+  blockTimestamp: Date!
+  txHash: String!
+}
+
+###########################
+### Aggregate Entities ####
+###########################
+
+type HourlyTxSnapshot @entity {
+  id: ID!
+  lastBlockHeight: BigInt!
+  lastBlockTimestamp: Date!
+  txCount: BigInt!
+}
+
+type DailyTxSnapshot @entity {
+  id: ID!
+  lastBlockHeight: BigInt!
+  lastBlockTimestamp: Date!
+  txCount: BigInt!
+}
+
+type MonthlyTxSnapshot @entity {
+  id: ID!
+  lastBlockHeight: BigInt!
+  lastBlockTimestamp: Date!
+  txCount: BigInt!
+}
+
+type HourlyIbcSnapshot @entity {
+  id: ID!
+  lastBlockHeight: BigInt!
+  lastBlockTimestamp: Date!
+  inCount: BigInt!
+  inVolume: Float!
+  outCount: BigInt!
+  outVolume: Float!
+}
+
+type DailyIbcSnapshot @entity {
+  id: ID!
+  lastBlockHeight: BigInt!
+  lastBlockTimestamp: Date!
+  inCount: BigInt!
+  inVolume: Float!
+  outCount: BigInt!
+  outVolume: Float!
+}
+
+type MonthlyIbcSnapshot @entity {
+  id: ID!
+  lastBlockHeight: BigInt!
+  lastBlockTimestamp: Date!
+  inCount: BigInt!
+  inVolume: Float!
+  outCount: BigInt!
+  outVolume: Float!
+}
+
+type HourlyUserSnapshot @entity {
+  id: ID!
+  lastBlockHeight: BigInt!
+  lastBlockTimestamp: Date!
+  userCount: BigInt!
+}
+
+type DailyUserSnapshot @entity {
+  id: ID!
+  lastBlockHeight: BigInt!
+  lastBlockTimestamp: Date!
+  userCount: BigInt!
+}
+
+type MonthlyUserSnapshot @entity {
+  id: ID!
+  lastBlockHeight: BigInt!
+  lastBlockTimestamp: Date!
+  userCount: BigInt!
+}
+
+###########################
+##### Helper Entities #####
+###########################
+
+# Helper entities are additional entities created to help with mapping.
+# They are usually used to store internal states that would simplify
+# the mapping logic. All helper entities should be prefixed with an
+# underscore to differentiate them from the common schema.
+
+type _CircularBuffer @entity {
+  " 'CIRCULAR_BUFFER' "
+  id: ID!
+
+  " Array of sorted block numbers sorted continuously "
+  blocks: [Int!]!
+
+  " The index in the blocks array which will be used with the newest block to calculate block speed (Usally set to about a day before newest block) "
+  windowStartIndex: Int!
+
+  " The next index in the blocks array that will be replaced with the newest block "
+  nextIndex: Int!
+
+  " This determines the size of the blocks array. Should be set to contain at least a days worth of blocks according to a 1 day window for measuring speed"
+  bufferSize: Int!
+
+  " The current calculated number of blocks per day based on calculated block speed "
+  blocksPerDay: Float!
+}
