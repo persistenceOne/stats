@@ -1,4 +1,4 @@
-import { DelegatorReward, User, IbcEvent, Transfer, Transaction, HourlyTxSnapshot, DailyTxSnapshot, MonthlyTxSnapshot } from "../types";
+import { DelegatorReward, User, IbcEvent, Transfer, Transaction } from "../types";
 import { CosmosEvent, CosmosTransaction } from "@subql/types-cosmos";
 import assert from "assert";
 
@@ -215,74 +215,15 @@ export async function handleTransaction(tx: CosmosTransaction): Promise<void> {
   });
   await transactionRecord.save();
 
-  const blockHour = tx.block.block.header.time.getUTCHours();
-  const blockDay = tx.block.block.header.time.getUTCDay();
-  const blockMonth = tx.block.block.header.time.getUTCMonth();
-  const blockYear = tx.block.block.header.time.getUTCFullYear();
-
   // iterate over all events in the transaction and get user addresses
   for (const event of tx.tx.events) {
     for (const attr of event.attributes) {
       if (attr.key === "sender") {
-        checkGetUser(attr.value)
+        await checkGetUser(attr.value)
       }
       if (attr.key === "recipient") {
-        checkGetUser(attr.value)
+        await checkGetUser(attr.value)
       }
     }
-  }
-
-  // save tx count and volume for the hour
-  let hourRecordID = `${blockYear}-${blockMonth}-${blockDay}-${blockHour}`;
-  const hourRecord = await HourlyTxSnapshot.get(hourRecordID);
-  if (!hourRecord) {
-    const newHourRecord = HourlyTxSnapshot.create({
-      id: hourRecordID,
-      lastBlockHeight: BigInt(tx.block.block.header.height),
-      lastBlockTimestamp: new Date(tx.block.block.header.time.toISOString()),
-      txCount: BigInt(1),
-    });
-    await newHourRecord.save();
-  } else {
-    hourRecord.txCount += BigInt(1);
-    hourRecord.lastBlockHeight = BigInt(tx.block.block.header.height);
-    hourRecord.lastBlockTimestamp = new Date(tx.block.block.header.time.toISOString());
-    await hourRecord.save();
-  }
-
-  // save tx count and volume for the day
-  let dayRecordID = `${blockYear}-${blockMonth}-${blockDay}`;
-  const dayRecord = await DailyTxSnapshot.get(dayRecordID);
-  if (!dayRecord) {
-    const newDayRecord = DailyTxSnapshot.create({
-      id: dayRecordID,
-      lastBlockHeight: BigInt(tx.block.block.header.height),
-      lastBlockTimestamp: new Date(tx.block.block.header.time.toISOString()),
-      txCount: BigInt(1),
-    });
-    await newDayRecord.save();
-  } else {
-    dayRecord.txCount += BigInt(1);
-    dayRecord.lastBlockHeight = BigInt(tx.block.block.header.height);
-    dayRecord.lastBlockTimestamp = new Date(tx.block.block.header.time.toISOString());
-    await dayRecord.save();
-  }
-
-  // save tx count and volume for the month
-  let monthRecordID = `${blockYear}-${blockMonth}`;
-  const monthRecord = await MonthlyTxSnapshot.get(monthRecordID);
-  if (!monthRecord) {
-    const newMonthRecord = MonthlyTxSnapshot.create({
-      id: monthRecordID,
-      lastBlockHeight: BigInt(tx.block.block.header.height),
-      lastBlockTimestamp: new Date(tx.block.block.header.time.toISOString()),
-      txCount: BigInt(1),
-    });
-    await newMonthRecord.save();
-  } else {
-    monthRecord.txCount += BigInt(1);
-    monthRecord.lastBlockHeight = BigInt(tx.block.block.header.height);
-    monthRecord.lastBlockTimestamp = new Date(tx.block.block.header.time.toISOString());
-    await monthRecord.save();
   }
 }
