@@ -1,8 +1,8 @@
-import { DelegatorReward, User, IbcEvent, Transfer, Transaction } from "../types";
+import { DelegatorReward, User, IbcEvent, Transfer, Transaction, ActiveUser } from "../types";
 import { CosmosEvent, CosmosTransaction } from "@subql/types-cosmos";
 import assert from "assert";
 
-export async function handleEvent(event: CosmosEvent): Promise<void> {
+export async function handleDelegatorRewardEvent(event: CosmosEvent): Promise<void> {
   // We create a new entity using the transaction hash and message index as a unique ID
   logger.info(
     `New delegator reward event at block ${event.block.block.header.height}`
@@ -35,18 +35,28 @@ export async function handleEvent(event: CosmosEvent): Promise<void> {
 interface EssentialValues {
   sender?: string;
   amount?: number;
+  denom?: string;
   receiver?: string;
   sequence?: string;
 }
 
-async function checkGetUser(user: string): Promise<User> {
+async function checkGetUser(user: string, blockTimestamp: Date): Promise<User> {
   let userRecord = await User.get(user.toLowerCase());
   if (!userRecord) {
     userRecord = User.create({
       id: user.toLowerCase(),
+      blockTimestamp: blockTimestamp,
     });
     await userRecord.save();
   }
+
+  let activeUserRecord = ActiveUser.create({
+    id: `${user.toLowerCase()}-${blockTimestamp.toISOString()}`,
+    walletAddress: user.toLowerCase(),
+    blockTimestamp: blockTimestamp,
+  });
+  await activeUserRecord.save();
+
   return userRecord;
 }
 
@@ -55,6 +65,7 @@ async function getEssensialValues(
 ): Promise<EssentialValues> {
   let sender;
   let amount;
+  let denom;
   let receiver;
   let sequence;
   for (const attr of event.event.attributes) {
@@ -63,6 +74,7 @@ async function getEssensialValues(
         sender = JSON.parse(attr.value)["sender"];
         receiver = JSON.parse(attr.value)["receiver"];
         amount = JSON.parse(attr.value)["amount"];
+        denom = JSON.parse(attr.value)["denom"];
         break;
       case "packet_sequence":
         sequence = attr.value;
@@ -71,29 +83,32 @@ async function getEssensialValues(
         break;
     }
   }
-  return { sender, amount, receiver, sequence };
+  return { sender, amount, denom, receiver, sequence };
 }
 
 async function populateValuesFromSource(
   sender: string,
   amount: string,
+  denom: string,
   receiver: string,
   sequence: string,
   event: CosmosEvent,
   type: string
 ) {
   let bridgeTransactionRecord = await IbcEvent.get(sequence);
+  const blockTimestamp = new Date(event.block.header.time.toISOString());
   if (!bridgeTransactionRecord) {
     bridgeTransactionRecord = IbcEvent.create({
       id: sequence,
       blockHeight: BigInt(event.block.block.header.height),
-      blockTimestamp: new Date(event.block.header.time.toISOString()),
+      blockTimestamp: blockTimestamp,
       txHash: event.tx.hash,
-      senderId: (await checkGetUser(sender)).id,
-      receiverId: (await checkGetUser(receiver)).id,
+      senderId: (await checkGetUser(sender, blockTimestamp)).id,
+      receiverId: (await checkGetUser(receiver, blockTimestamp)).id,
       sourceChain: event.block.header.chainId,
       sourceChainTransaction: event.tx.hash.toString(),
       amount: BigInt(amount),
+      denom: denom,
       type: type,
     });
   } else {
@@ -106,23 +121,26 @@ async function populateValuesFromSource(
 async function populateValuesFromDestination(
   sender: string,
   amount: string,
+  denom: string,
   receiver: string,
   sequence: string,
   event: CosmosEvent,
   type: string
 ) {
   let bridgeTransactionRecord = await IbcEvent.get(sequence);
+  const blockTimestamp = new Date(event.block.header.time.toISOString());
   if (!bridgeTransactionRecord) {
     bridgeTransactionRecord = IbcEvent.create({
       id: sequence,
       blockHeight: BigInt(event.block.block.header.height),
-      blockTimestamp: new Date(event.block.header.time.toISOString()),
+      blockTimestamp: blockTimestamp,
       txHash: event.tx.hash,
-      senderId: (await checkGetUser(sender)).id,
-      receiverId: (await checkGetUser(receiver)).id,
+      senderId: (await checkGetUser(sender, blockTimestamp)).id,
+      receiverId: (await checkGetUser(receiver, blockTimestamp)).id,
       destinationChain: event.block.header.chainId,
       destinationChainTransaction: event.tx.hash.toString(),
       amount: BigInt(amount),
+      denom: denom,
       type: type,
     });
   } else {
@@ -140,13 +158,14 @@ export async function handleIBCReceiveEvent(
     `Handling an incoming transfer event on Persistence from ${event.tx.hash.toString()}`
   );
 
-  const { sender, amount, receiver, sequence } = await getEssensialValues(
+  const { sender, amount, denom, receiver, sequence } = await getEssensialValues(
     event
   );
-  if (sequence && sender && receiver && amount) {
+  if (sequence && sender && receiver && amount && denom) {
     populateValuesFromDestination(
       sender,
       amount.toString(),
+      denom,
       receiver,
       sequence,
       event,
@@ -162,14 +181,15 @@ export async function handleIBCSendEvent(
     `Handling an outgoing transfer event on Persistence from ${event.tx.hash.toString()}`
   );
 
-  const { sender, amount, receiver, sequence } = await getEssensialValues(
+  const { sender, amount, denom, receiver, sequence } = await getEssensialValues(
     event
   );
 
-  if (sequence && sender && receiver && amount) {
+  if (sequence && sender && receiver && amount && denom) {
     populateValuesFromSource(
       sender,
       amount.toString(),
+      denom,
       receiver,
       sequence,
       event,
@@ -179,10 +199,11 @@ export async function handleIBCSendEvent(
 }
 
 export async function handleTransferEvent(event: CosmosEvent): Promise<void> {
+  const blockTimestamp = new Date(event.block.header.time.toISOString());
   const eventRecord = Transfer.create({
     id: `${event.tx.hash}-${event.msg.idx}-${event.idx}`,
     blockHeight: BigInt(event.block.block.header.height),
-    blockTimestamp: new Date(event.block.header.time.toISOString()),
+    blockTimestamp: blockTimestamp,
     txHash: event.tx.hash,
     toAddress: "",
     amount: "",
@@ -191,13 +212,13 @@ export async function handleTransferEvent(event: CosmosEvent): Promise<void> {
   for (const attr of event.event.attributes) {
     switch (attr.key) {
       case "recipient":
-        eventRecord.toAddress = attr.value;
+        eventRecord.toAddress = (await checkGetUser(attr.value, blockTimestamp)).id;
         break;
       case "amount":
         eventRecord.amount = attr.value;
         break;
       case "sender":
-        eventRecord.fromAddress = attr.value;
+        eventRecord.fromAddress = (await checkGetUser(attr.value, blockTimestamp)).id;
         break;
       default:
         break;
@@ -207,10 +228,11 @@ export async function handleTransferEvent(event: CosmosEvent): Promise<void> {
 }
 
 export async function handleTransaction(tx: CosmosTransaction): Promise<void> {
+  const blockTimestamp = new Date(tx.block.block.header.time.toISOString());
   const transactionRecord = Transaction.create({
     id: `${tx.block.block.header.height}-${tx.hash}`,
     blockHeight: BigInt(tx.block.block.header.height),
-    blockTimestamp: new Date(tx.block.block.header.time.toISOString()),
+    blockTimestamp: blockTimestamp,
     txHash: tx.hash,
   });
   await transactionRecord.save();
@@ -219,10 +241,10 @@ export async function handleTransaction(tx: CosmosTransaction): Promise<void> {
   for (const event of tx.tx.events) {
     for (const attr of event.attributes) {
       if (attr.key === "sender") {
-        await checkGetUser(attr.value)
+        (await checkGetUser(attr.value, blockTimestamp)).id
       }
       if (attr.key === "recipient") {
-        await checkGetUser(attr.value)
+        (await checkGetUser(attr.value, blockTimestamp)).id
       }
     }
   }

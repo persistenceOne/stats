@@ -26,11 +26,19 @@ type IbcEvent @entity {
   destinationChain: String
   destinationChainTransaction: String
   amount: BigInt
+  denom: String
   type: String
 }
 
 type User @entity {
   id: ID! # Wallet Address
+  blockTimestamp: Date!
+}
+
+type ActiveUser @entity {
+  id: ID!
+  walletAddress: String!
+  blockTimestamp: Date!
 }
 
 type Transfer @entity {
