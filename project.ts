@@ -55,7 +55,7 @@ const project: CosmosProject = {
         file: "./dist/index.js",
         handlers: [
           {
-            handler: "handleEvent",
+            handler: "handleDelegatorRewardEvent",
             kind: CosmosHandlerKind.Event,
             filter: {
               type: "coin_spent",
