@@ -21,7 +21,7 @@ export async function handleDelegatorRewardEvent(event: CosmosEvent): Promise<vo
     validatorAddress: event.msg.msg.decodedMsg.validatorAddress,
   });
 
-  if (event.msg.tx.decodedTx.authInfo.fee) {
+  if (event.msg.tx.decodedTx.authInfo.fee.amount.length > 0) {
     newDelegatorReward.feeAmount = event.msg.tx.decodedTx.authInfo.fee.amount[0].amount;
     newDelegatorReward.feeDenomination = event.msg.tx.decodedTx.authInfo.fee.amount[0].denom;
   }
