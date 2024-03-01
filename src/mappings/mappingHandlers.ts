@@ -19,9 +19,12 @@ export async function handleDelegatorRewardEvent(event: CosmosEvent): Promise<vo
     txHash: event.tx.hash,
     delegatorAddress: event.msg.msg.decodedMsg.delegatorAddress,
     validatorAddress: event.msg.msg.decodedMsg.validatorAddress,
-    feeAmount: event.msg.tx.decodedTx.authInfo.fee.amount[0].amount,
-    feeDenomination: event.msg.tx.decodedTx.authInfo.fee.amount[0].denom,
   });
+
+  if (event.msg.tx.decodedTx.authInfo.fee) {
+    newDelegatorReward.feeAmount = event.msg.tx.decodedTx.authInfo.fee.amount[0].amount;
+    newDelegatorReward.feeDenomination = event.msg.tx.decodedTx.authInfo.fee.amount[0].denom;
+  }
 
   // Cosmos events code attributes as an array of key value pairs, we're looking for an amount
   for (const attr of event.event.attributes) {
