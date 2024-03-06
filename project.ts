@@ -35,7 +35,7 @@ const project: CosmosProject = {
      * If you use a rate limited endpoint, adjust the --batch-size and --workers parameters
      * These settings can be found in your docker-compose.yaml, they will slow indexing but prevent your project being rate limited
      */
-    endpoint: ["https://r-persistence-archive-sub--bcywy3hiu48d2lsns79bf1lqpjvomhqn.gw.notionalapi.com/"],
+    endpoint: ["https://rpc.persistence.audit.one:443"],
     chaintypes: new Map([
       [
         "cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
